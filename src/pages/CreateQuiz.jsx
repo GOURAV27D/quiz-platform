@@ -3,79 +3,197 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { saveQuiz } from "../redux/quizActions.js";
 
+const createEmptyQuestion = () => ({
+  type: "single",
+  question: "",
+  options: ["", ""],
+  correctAnswer: "",
+  correctAnswers: [],
+  expectedAnswer: "",
+  expectedSentences: 2,
+});
+
 function CreateQuiz() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
   const [title, setTitle] = useState("");
-  const [question, setQuestion] = useState("");
-  const [optionA, setOptionA] = useState("");
-  const [optionB, setOptionB] = useState("");
-  const [optionC, setOptionC] = useState("");
-  const [optionD, setOptionD] = useState("");
-  const [correctAnswer, setCorrectAnswer] = useState("");
   const [questions, setQuestions] = useState([]);
+  const [current, setCurrent] = useState(createEmptyQuestion());
 
-  const addQuestion = (e) => {
-    e.preventDefault();
+  const isMCQ =
+    current.type === "single" || current.type === "multiple";
 
-    const cleanQuestion = question.trim();
-    const options = [
-      optionA.trim(),
-      optionB.trim(),
-      optionC.trim(),
-      optionD.trim(),
-    ];
+  const updateQuestion = (field, value) => {
+    setCurrent((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
 
-    if (
-      cleanQuestion.length < 10 ||
-      cleanQuestion.length > 200
-    ) {
+  const changeType = (type) => {
+    setCurrent({
+      ...createEmptyQuestion(),
+      type,
+    });
+  };
+
+  const updateOption = (index, value) => {
+    setCurrent((previous) => {
+      const options = [...previous.options];
+      const oldValue = options[index];
+      options[index] = value;
+
+      return {
+        ...previous,
+        options,
+        correctAnswer:
+          previous.correctAnswer === oldValue
+            ? ""
+            : previous.correctAnswer,
+        correctAnswers: previous.correctAnswers.filter(
+          (answer) => answer !== oldValue
+        ),
+      };
+    });
+  };
+
+  const addOption = () => {
+    if (current.options.length >= 4) {
+      alert("You can add a maximum of four options.");
+      return;
+    }
+
+    updateQuestion("options", [...current.options, ""]);
+  };
+
+  const removeOption = (index) => {
+    if (current.options.length <= 2) {
+      alert("At least two options are required.");
+      return;
+    }
+
+    const removed = current.options[index];
+
+    setCurrent((previous) => ({
+      ...previous,
+      options: previous.options.filter((_, i) => i !== index),
+      correctAnswer:
+        previous.correctAnswer === removed
+          ? ""
+          : previous.correctAnswer,
+      correctAnswers: previous.correctAnswers.filter(
+        (answer) => answer !== removed
+      ),
+    }));
+  };
+
+  const toggleCorrectAnswer = (option) => {
+    setCurrent((previous) => {
+      const selected = previous.correctAnswers;
+
+      return {
+        ...previous,
+        correctAnswers: selected.includes(option)
+          ? selected.filter((answer) => answer !== option)
+          : [...selected, option],
+      };
+    });
+  };
+
+  const addQuestion = (event) => {
+    event.preventDefault();
+
+    const questionText = current.question.trim();
+
+    if (questionText.length < 10 || questionText.length > 200) {
       alert("Question must be between 10 and 200 characters.");
       return;
     }
 
-    if (options.some((option) => !option)) {
-      alert("Please fill in all four options.");
-      return;
+    let newQuestion;
+
+    if (isMCQ) {
+      const options = current.options.map((option) => option.trim());
+
+      if (options.some((option) => !option)) {
+        alert("Please fill in every option.");
+        return;
+      }
+
+      if (new Set(options.map((option) => option.toLowerCase())).size !== options.length) {
+        alert("All options must be different.");
+        return;
+      }
+
+      if (current.type === "single") {
+        if (!current.correctAnswer || !options.includes(current.correctAnswer.trim())) {
+          alert("Please select the correct answer.");
+          return;
+        }
+
+        newQuestion = {
+          type: "single",
+          question: questionText,
+          options,
+          correctAnswer: current.correctAnswer.trim(),
+        };
+      } else {
+        const correctAnswers = current.correctAnswers.filter(
+          (answer) => options.includes(answer.trim())
+        );
+
+        if (correctAnswers.length === 0) {
+          alert("Select at least one correct answer.");
+          return;
+        }
+
+        newQuestion = {
+          type: "multiple",
+          question: questionText,
+          options,
+          correctAnswers,
+        };
+      }
+    } else if (current.type === "short") {
+      const expectedAnswer = current.expectedAnswer.trim();
+      const wordCount = expectedAnswer
+        ? expectedAnswer.split(/\s+/).length
+        : 0;
+
+      if (!expectedAnswer || wordCount > 2) {
+        alert("Enter an expected answer using one or two words.");
+        return;
+      }
+
+      newQuestion = {
+        type: "short",
+        question: questionText,
+        expectedAnswer,
+      };
+    } else {
+      newQuestion = {
+        type: "description",
+        question: questionText,
+        expectedSentences: Number(current.expectedSentences),
+      };
     }
 
-    if (new Set(options).size !== options.length) {
-      alert("All four options must be different.");
-      return;
-    }
-
-    if (!options.includes(correctAnswer)) {
-      alert("Please select a valid correct answer.");
-      return;
-    }
-
-    setQuestions((previousQuestions) => [
-      ...previousQuestions,
-      {
-        question: cleanQuestion,
-        options,
-        correctAnswer,
-      },
-    ]);
-
-    setQuestion("");
-    setOptionA("");
-    setOptionB("");
-    setOptionC("");
-    setOptionD("");
-    setCorrectAnswer("");
-
+    setQuestions((previous) => [...previous, newQuestion]);
+    setCurrent(createEmptyQuestion());
     alert("Question added successfully!");
+  };
+
+  const removeQuestion = (index) => {
+    setQuestions((previous) =>
+      previous.filter((_, i) => i !== index)
+    );
   };
 
   const createQuiz = () => {
     const cleanTitle = title.trim();
 
-    if (
-      cleanTitle.length < 10 ||
-      cleanTitle.length > 30
-    ) {
+    if (cleanTitle.length < 10 || cleanTitle.length > 30) {
       alert("Quiz title must be between 10 and 30 characters.");
       return;
     }
@@ -85,22 +203,18 @@ function CreateQuiz() {
       return;
     }
 
-    try {
-      const result = dispatch(
-        saveQuiz({
-          title: cleanTitle,
-          questions,
-        })
-      );
+    const result = dispatch(
+      saveQuiz({
+        id: Date.now().toString(),
+        title: cleanTitle,
+        questions,
+      })
+    );
 
-      if (result && result.success) {
-        alert("Quiz created successfully!");
-        navigate("/my-quizzes");
-      } else {
-        alert("Could not save the quiz. Please try again.");
-      }
-    } catch (error) {
-      console.error("Error saving quiz:", error);
+    if (result?.success) {
+      alert("Quiz created successfully!");
+      navigate("/my-quizzes");
+    } else {
       alert("Could not save the quiz. Please try again.");
     }
   };
@@ -109,13 +223,9 @@ function CreateQuiz() {
     <div className="create-quiz-page">
       <header className="create-quiz-header">
         <div>
-          <span className="cq-eyebrow">
-            BUILD SOMETHING GREAT
-          </span>
+          <span className="cq-eyebrow">BUILD SOMETHING GREAT</span>
           <h1>Create a Quiz 📝</h1>
-          <p>
-            Write questions, add options, and test your knowledge.
-          </p>
+          <p>Create different question types for your quiz.</p>
         </div>
 
         <button
@@ -133,23 +243,21 @@ function CreateQuiz() {
             <span className="cq-section-icon">📋</span>
             <div>
               <h2>Quiz Details</h2>
-              <p>Start by giving your quiz a title.</p>
+              <p>Give your quiz a title between 10 and 30 characters.</p>
             </div>
           </div>
 
           <label className="cq-label" htmlFor="quiz-title">
-            Quiz Title (10–30 characters)
+            Quiz Title
           </label>
-
           <input
             id="quiz-title"
             className="cq-input"
-            type="text"
+            value={title}
             minLength={10}
             maxLength={30}
+            onChange={(event) => setTitle(event.target.value)}
             placeholder="e.g. General Knowledge"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
           />
 
           <div className="cq-divider" />
@@ -158,129 +266,162 @@ function CreateQuiz() {
             <span className="cq-section-icon">💡</span>
             <div>
               <h2>Add a Question</h2>
-              <p>
-                Provide four different options and select the correct answer.
-              </p>
+              <p>Choose the type and fill in the details.</p>
             </div>
           </div>
 
           <form onSubmit={addQuestion}>
-            <label className="cq-label" htmlFor="question">
-              Question {questions.length + 1} (10–200 characters)
+            <label className="cq-label" htmlFor="question-type">
+              Question Type
             </label>
+            <select
+              id="question-type"
+              className="cq-input"
+              value={current.type}
+              onChange={(event) => changeType(event.target.value)}
+            >
+              <option value="single">MCQ — Single Correct Answer</option>
+              <option value="multiple">MCQ — Multiple Correct Answers</option>
+              <option value="short">Short Answer — Up to 2 Words</option>
+              <option value="description">Description — 2 or 4 Sentences</option>
+            </select>
 
+            <label className="cq-label" htmlFor="question">
+              Question ({current.question.length}/200 characters)
+            </label>
             <textarea
               id="question"
               className="cq-input cq-textarea"
+              value={current.question}
               minLength={10}
               maxLength={200}
+              onChange={(event) =>
+                updateQuestion("question", event.target.value)
+              }
               placeholder="Type your question here..."
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
             />
 
-            <div className="cq-options-grid">
-              <div>
-                <label className="cq-label" htmlFor="option-a">
-                  Option A
+            {isMCQ && (
+              <>
+                <div className="cq-options-grid">
+                  {current.options.map((option, index) => (
+                    <div key={index}>
+                      <label className="cq-label" htmlFor={`option-${index}`}>
+                        Option {String.fromCharCode(65 + index)}
+                      </label>
+
+                      <div>
+                        <input
+                          id={`option-${index}`}
+                          className="cq-input"
+                          value={option}
+                          maxLength={100}
+                          onChange={(event) =>
+                            updateOption(index, event.target.value)
+                          }
+                          placeholder={`Enter option ${String.fromCharCode(65 + index)}`}
+                        />
+
+                        {current.options.length > 2 && (
+                          <button
+                            type="button"
+                            className="cq-btn"
+                            onClick={() => removeOption(index)}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {current.options.length < 4 && (
+                  <button
+                    type="button"
+                    className="cq-btn"
+                    onClick={addOption}
+                  >
+                    + Add Option
+                  </button>
+                )}
+
+                <label className="cq-label">
+                  {current.type === "single"
+                    ? "Select the correct answer"
+                    : "Select all correct answers"}
+                </label>
+
+                {current.options.map((option, index) =>
+                  option.trim() ? (
+                    <label
+                      key={index}
+                      style={{ display: "block", margin: "10px 0" }}
+                    >
+                      <input
+                        type={current.type === "single" ? "radio" : "checkbox"}
+                        name="correct-answer"
+                        checked={
+                          current.type === "single"
+                            ? current.correctAnswer === option.trim()
+                            : current.correctAnswers.includes(option.trim())
+                        }
+                        onChange={() => {
+                          if (current.type === "single") {
+                            updateQuestion("correctAnswer", option.trim());
+                          } else {
+                            toggleCorrectAnswer(option.trim());
+                          }
+                        }}
+                      />
+                      {" "}
+                      {String.fromCharCode(65 + index)}. {option}
+                    </label>
+                  ) : null
+                )}
+              </>
+            )}
+
+            {current.type === "short" && (
+              <>
+                <label className="cq-label" htmlFor="expected-answer">
+                  Expected Answer (maximum 2 words)
                 </label>
                 <input
-                  id="option-a"
+                  id="expected-answer"
                   className="cq-input"
+                  value={current.expectedAnswer}
                   maxLength={100}
-                  placeholder="Enter option A"
-                  value={optionA}
-                  onChange={(e) => {
-                    setOptionA(e.target.value);
-                    if (correctAnswer === optionA) {
-                      setCorrectAnswer("");
-                    }
-                  }}
+                  onChange={(event) =>
+                    updateQuestion("expectedAnswer", event.target.value)
+                  }
+                  placeholder="e.g. New Delhi"
                 />
-              </div>
+              </>
+            )}
 
-              <div>
-                <label className="cq-label" htmlFor="option-b">
-                  Option B
+            {current.type === "description" && (
+              <>
+                <label className="cq-label" htmlFor="expected-sentences">
+                  Expected Response Length
                 </label>
-                <input
-                  id="option-b"
+                <select
+                  id="expected-sentences"
                   className="cq-input"
-                  maxLength={100}
-                  placeholder="Enter option B"
-                  value={optionB}
-                  onChange={(e) => {
-                    setOptionB(e.target.value);
-                    if (correctAnswer === optionB) {
-                      setCorrectAnswer("");
-                    }
-                  }}
-                />
-              </div>
-
-              <div>
-                <label className="cq-label" htmlFor="option-c">
-                  Option C
-                </label>
-                <input
-                  id="option-c"
-                  className="cq-input"
-                  maxLength={100}
-                  placeholder="Enter option C"
-                  value={optionC}
-                  onChange={(e) => {
-                    setOptionC(e.target.value);
-                    if (correctAnswer === optionC) {
-                      setCorrectAnswer("");
-                    }
-                  }}
-                />
-              </div>
-
-              <div>
-                <label className="cq-label" htmlFor="option-d">
-                  Option D
-                </label>
-                <input
-                  id="option-d"
-                  className="cq-input"
-                  maxLength={100}
-                  placeholder="Enter option D"
-                  value={optionD}
-                  onChange={(e) => {
-                    setOptionD(e.target.value);
-                    if (correctAnswer === optionD) {
-                      setCorrectAnswer("");
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            <label className="cq-label" htmlFor="correct-answer">
-              Correct Answer
-            </label>
-
-            <select
-              id="correct-answer"
-              className="cq-input"
-              value={correctAnswer}
-              onChange={(e) => setCorrectAnswer(e.target.value)}
-            >
-              <option value="">Select the correct option</option>
-              {[
-                ["A", optionA],
-                ["B", optionB],
-                ["C", optionC],
-                ["D", optionD],
-              ]
-                .filter(([, value]) => value.trim())
-                .map(([letter, value]) => (
-                  <option key={letter} value={value.trim()}>
-                    Option {letter}: {value}
-                  </option>
-                ))}
-            </select>
+                  value={current.expectedSentences}
+                  onChange={(event) =>
+                    updateQuestion("expectedSentences", event.target.value)
+                  }
+                >
+                  <option value={2}>2 sentences</option>
+                  <option value={4}>4 sentences</option>
+                </select>
+                <p>
+                  Descriptive answers will need manual review; they cannot be
+                  reliably marked correct automatically.
+                </p>
+              </>
+            )}
 
             <button className="cq-btn cq-add" type="submit">
               + Add Question
@@ -293,19 +434,16 @@ function CreateQuiz() {
                 Questions Added <span>{questions.length}</span>
               </h2>
 
-              {questions.map((q, index) => (
+              {questions.map((question, index) => (
                 <div className="cq-added-question" key={index}>
-                  <strong>Question {index + 1}</strong>
-                  <p>{q.question}</p>
-
+                  <strong>
+                    Question {index + 1} — {question.type}
+                  </strong>
+                  <p>{question.question}</p>
                   <button
                     type="button"
                     className="cq-btn"
-                    onClick={() =>
-                      setQuestions((previous) =>
-                        previous.filter((_, i) => i !== index)
-                      )
-                    }
+                    onClick={() => removeQuestion(index)}
                   >
                     Remove Question
                   </button>
@@ -324,9 +462,7 @@ function CreateQuiz() {
         </section>
       </main>
 
-      <footer className="cq-footer">
-        © 2026 Quiz Platform 🎯
-      </footer>
+      <footer className="cq-footer">© 2026 Quiz Platform 🎯</footer>
     </div>
   );
 }
